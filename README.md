@@ -15,3 +15,12 @@ Writing a CHIP-8 emulator following along with [blog](https://tobiasvl.github.io
 - An 8-bit _sound timer_ which functions like the delay timer, but which also gives off a beeping sound as long as it's not 0
 - 16 8-bit (one byte) general-purpose _variable_ registers numbered `0` through `F` hexadecimal, ie. 0 through 15 in decimal, called `V0` through `VF`
   - `VF` is also used as a `flag register`; many instructions will set it to either 1 or 0 based on some rule, for example using it as a carry flag
+
+## TODO
+
+- [ ] add debugging capabilities
+  - [ ] pause
+  - [ ] step
+  - [x] print contents of registers - only 16 so can print it all the time
+  - [x] print contents of memory - 4096 bytes so need to frame/window the segment
+  - [x] print the whole program (raw bytes) - left column address right column instruction
