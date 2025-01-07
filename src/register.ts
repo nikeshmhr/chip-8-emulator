@@ -1,8 +1,9 @@
 import EventsManager, { EVENTS } from "./eventManager";
 
 class Register {
-  private _V = new Uint8Array(16); // registers
-  private _PC = 0x200; // program counter
+  private readonly _V = new Uint8Array(16); // registers
+  private _PC = 0; // program counter
+  private _I = 0; // index register
   private eventManager: EventsManager;
 
   constructor() {
@@ -10,7 +11,7 @@ class Register {
   }
 
   get V() {
-    return this._V;
+    return this._V as Readonly<Uint8Array>;
   }
 
   setRegister(register: number, value: number) {
@@ -29,6 +30,16 @@ class Register {
     // only publish the event if the value is different
     if (previousPC !== this._PC)
       this.eventManager.publish(EVENTS.PROGRAM_COUNTER_UPDATED, this._PC);
+  }
+
+  get I() {
+    return this._I;
+  }
+
+  set I(value: number) {
+    this._I = value;
+
+    this.eventManager.publish(EVENTS.INDEX_REGISTER_UPDATED, this._I);
   }
 }
 

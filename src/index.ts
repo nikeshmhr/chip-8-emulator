@@ -1,4 +1,5 @@
 import EventsManager, { EVENTS } from "./eventManager";
+import RAM from "./memory";
 import register from "./register";
 import IBMLogo from "./rom/ibm-logo";
 
@@ -10,6 +11,11 @@ const eventsManager = EventsManager.getInstance();
   const UNIT = 1;
   const WIDTH = 64 * SCALE;
   const HEIGHT = 32 * SCALE;
+  const PROGRAM_START_ADDRESS = 0x200;
+
+  const FPS = 60;
+  const MILLISECONDS_IN_A_SECOND = 1000;
+  const FRAME_TIME = MILLISECONDS_IN_A_SECOND / FPS;
 
   const COLORS = {
     ON: "#b4e5af",
@@ -17,22 +23,107 @@ const eventsManager = EventsManager.getInstance();
     GRID_OUTLINE: "#ffffff33",
   };
 
-  const canvas = document.createElement("canvas");
+  const PROGRAM_STATE = {
+    running: false,
+    debuggerEnabled: false,
+  };
+
+  // const canvas = document.createElement("canvas");
+  const canvas = document.getElementById("screen") as HTMLCanvasElement;
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
-  canvas.id = "screen";
-  document.getElementById("container")!.appendChild(canvas);
+  // canvas.id = "screen";
+  // document.getElementById("container")!.appendChild(canvas);
+
+  const BLINKING_ANIMATION_PARAMS: [Keyframe[], KeyframeAnimationOptions] = [
+    [
+      { backgroundColor: "rgba(255, 255, 0, 0.5)" },
+      { backgroundColor: "rgba(255, 255, 0, 0)" },
+    ],
+    {
+      duration: 1000,
+      iterations: 3,
+    },
+  ];
+
+  const SCROLL_BEHAVIOR_PARAMS: ScrollIntoViewOptions = {
+    behavior: "instant",
+    block: "center",
+    inline: "center",
+  };
 
   const registerUIElement = document.getElementById(
     "registers"
   ) as HTMLDivElement;
 
   const memoryUIElement = document.getElementById("memory") as HTMLDivElement;
-  memoryUIElement.style.height = `${HEIGHT}px`;
+  memoryUIElement.style.height = `${HEIGHT * 2}px`;
+  const memoryContentUIElement = document.getElementById(
+    "memory-content"
+  ) as HTMLDivElement;
+  const followPCUIElement = document.getElementById(
+    "follow-pc"
+  ) as HTMLInputElement;
+  const gotoAddressUIInputElement = document.getElementById(
+    "memory-search"
+  ) as HTMLInputElement;
+
+  // memory controls ui elements
+  const gotoPCUIElement = document.getElementById(
+    "go-to-pc"
+  ) as HTMLButtonElement;
+  const memorySearchUIElement = document.getElementById(
+    "memory-search"
+  ) as HTMLInputElement;
+  const memorySearchButton = document.getElementById(
+    "memory-search-btn"
+  ) as HTMLButtonElement;
+
+  // debugger page elements
+  const toggleDebuggerUIElement = document.getElementById(
+    "toggle-debugger"
+  ) as HTMLInputElement;
+  const stepUIElement = document.getElementById("step") as HTMLButtonElement;
+  const continueUIElement = document.getElementById(
+    "continue"
+  ) as HTMLButtonElement;
+
+  // load program ui element
+  const selectProgramUIElement = document.getElementById(
+    "select-program"
+  ) as HTMLSelectElement;
+  const loadProgramUIElement = document.getElementById(
+    "load-program"
+  ) as HTMLButtonElement;
+
+  setupUIEventHandlers();
+
+  function setupUIEventHandlers() {
+    gotoPCUIElement.addEventListener("click", gotoPC);
+    memorySearchUIElement.addEventListener("keyup", (event) => {
+      if (event.key === "Enter") {
+        gotoAddress();
+      }
+    });
+    memorySearchButton.addEventListener("click", gotoAddress);
+
+    loadProgramUIElement.addEventListener("click", loadProgram);
+
+    toggleDebuggerUIElement.addEventListener("click", toggleDebugger);
+    stepUIElement.addEventListener("click", () => {
+      PROGRAM_STATE.running = true;
+    });
+    continueUIElement.addEventListener("click", () => {
+      PROGRAM_STATE.debuggerEnabled = false;
+      PROGRAM_STATE.running = true;
+      toggleDebuggerUIElement.checked = false;
+    });
+  }
 
   const EVENTS_HANDLER = {
     [EVENTS.REGISTER_UPDATED]: handleRegisterUpdate,
     [EVENTS.PROGRAM_COUNTER_UPDATED]: handlePCUpdate,
+    [EVENTS.MEMORY_UPDATED]: printMemory,
   };
 
   for (const event in EVENTS_HANDLER) {
@@ -47,90 +138,79 @@ const eventsManager = EventsManager.getInstance();
   let lastPaintTime = 0;
 
   const pixelState = new Array(WIDTH * HEIGHT).fill(0);
-  const memory = new Uint8Array(4096);
-  // const V = new Uint8Array(16); // registers
   const REGISTER = register;
-  let I = 0; // index register
-  // let pc = 0x200;
 
-  loadProgram();
-  printMemory();
-  handleRegisterUpdate();
-
-  let running = true;
-  await sleep(500);
-
-  setGrid();
-
-  loop();
+  // setGrid();
 
   async function loop() {
-    if (running) {
+    if (PROGRAM_STATE.running) {
       const now = Date.now();
-      // if (lastPaintTime < now - 1000 / 60) {
-      lastPaintTime = now;
+      if (now - lastPaintTime >= FRAME_TIME) {
+        lastPaintTime = now;
 
-      const opcode = (memory[REGISTER.pc] << 8) | memory[REGISTER.pc + 1];
+        const opcode =
+          (RAM.memory[REGISTER.pc] << 8) | RAM.memory[REGISTER.pc + 1];
 
-      switch (opcode & 0xf000) {
-        case 0x0000:
-          if ((opcode & 0x0fff) == 0x00e0) {
-            clearScreen();
-            REGISTER.pc += 2;
-          }
-          break;
-
-        case 0x1000:
-          REGISTER.pc = opcode & 0x0fff;
-          break;
-
-        case 0x6000:
-          const register = (opcode & 0x0f00) >> 8;
-          const value = opcode & 0x00ff;
-          REGISTER.setRegister(register, value);
-          REGISTER.pc += 2;
-          break;
-
-        case 0x7000:
-          const r = (opcode & 0x0f00) >> 8;
-          const val = opcode & 0x00ff;
-          REGISTER.setRegister(r, REGISTER.V[r] + val);
-          REGISTER.pc += 2;
-          break;
-
-        case 0xa000:
-          const v = opcode & 0x0fff;
-          I = v;
-          REGISTER.pc += 2;
-          break;
-
-        case 0xd000:
-          const height = opcode & 0x000f;
-          const x = REGISTER.V[(opcode & 0x0f00) >> 8];
-          const y = REGISTER.V[(opcode & 0x00f0) >> 4];
-          REGISTER.setRegister(0xf, 0);
-          for (let i = 0; i < height; i++) {
-            const spriteData = memory[I + i];
-            for (let j = 0; j < 8; j++) {
-              const pixel = (spriteData >> (7 - j)) & 0x1;
-              const pixelIndex = c2p(x + j, y + i);
-              if (pixelState[pixelIndex] === 1 && pixel === 1) {
-                REGISTER.setRegister(0xf, 1);
-              }
-              pixelState[pixelIndex] = pixelState[pixelIndex] ^ pixel;
+        switch (opcode & 0xf000) {
+          case 0x0000:
+            if ((opcode & 0x0fff) == 0x00e0) {
+              clearScreen();
+              REGISTER.pc += 2;
             }
-          }
-          drawScreen();
-          REGISTER.pc += 2;
-          break;
+            break;
 
-        default:
-          console.error(`Unknown opcode: ${opcode.toString(16)}`);
-          running = false;
+          case 0x1000:
+            REGISTER.pc = opcode & 0x0fff;
+            break;
+
+          case 0x6000:
+            const register = (opcode & 0x0f00) >> 8;
+            const value = opcode & 0x00ff;
+            REGISTER.setRegister(register, value);
+            REGISTER.pc += 2;
+            break;
+
+          case 0x7000:
+            const r = (opcode & 0x0f00) >> 8;
+            const val = opcode & 0x00ff;
+            REGISTER.setRegister(r, REGISTER.V[r] + val);
+            REGISTER.pc += 2;
+            break;
+
+          case 0xa000:
+            const v = opcode & 0x0fff;
+            REGISTER.I = v;
+            REGISTER.pc += 2;
+            break;
+
+          case 0xd000:
+            const height = opcode & 0x000f;
+            const x = REGISTER.V[(opcode & 0x0f00) >> 8];
+            const y = REGISTER.V[(opcode & 0x00f0) >> 4];
+            REGISTER.setRegister(0xf, 0);
+            for (let i = 0; i < height; i++) {
+              const spriteData = RAM.memory[REGISTER.I + i];
+              for (let j = 0; j < 8; j++) {
+                const pixel = (spriteData >> (7 - j)) & 0x1;
+                const pixelIndex = c2p(x + j, y + i);
+                if (pixelState[pixelIndex] === 1 && pixel === 1) {
+                  REGISTER.setRegister(0xf, 1);
+                }
+                pixelState[pixelIndex] = pixelState[pixelIndex] ^ pixel;
+              }
+            }
+            drawScreen();
+            REGISTER.pc += 2;
+            break;
+
+          default:
+            console.error(`Unknown opcode: ${opcode.toString(16)}`);
+            PROGRAM_STATE.running = false;
+        }
       }
-      // }
 
-      await sleep(500);
+      // await sleep(500);
+      checkDebugger();
     }
     requestAnimationFrame(loop);
   }
@@ -163,9 +243,20 @@ const eventsManager = EventsManager.getInstance();
 
   function loadProgram() {
     const program = IBMLogo;
-    for (let i = 0; i < program.length; i++) {
-      memory[i + 512] = program[i];
-    }
+    RAM.loadProgram(Uint8Array.from(program));
+
+    // start program
+    startProgram();
+  }
+
+  async function startProgram() {
+    REGISTER.pc = PROGRAM_START_ADDRESS;
+    printMemory();
+    handleRegisterUpdate();
+    PROGRAM_STATE.running = true;
+    await sleep(200);
+
+    loop();
   }
 
   function sleep(ms: number) {
@@ -186,7 +277,7 @@ const eventsManager = EventsManager.getInstance();
   function handleRegisterUpdate() {
     let html = `
       <div class="row">
-          <div>Register values</div>
+          <h2>Register values</h2>
       </div>
       <div class="row">
           <div>Name</div>
@@ -210,16 +301,15 @@ const eventsManager = EventsManager.getInstance();
   }
 
   function printMemory() {
-    // const programLength = IBMLogo.length;
-    let html = `
-      <div class="memory-heading">Memory</div>
-    `;
-    // const offSet = 0x200;
+    let html = ``;
     const offSet = 0x0;
 
-    for (let i = 0; i < memory.length; i += 2) {
+    for (let i = 0; i < RAM.memory.length; i += 2) {
       const twoBytesAddress = (i + offSet).toString(16).padStart(4, "0");
-      const opcode = ((memory[i + offSet] << 8) | memory[i + offSet + 1])
+      const opcode = (
+        (RAM.memory[i + offSet] << 8) |
+        RAM.memory[i + offSet + 1]
+      )
         .toString(16)
         .padStart(4, "0");
 
@@ -234,7 +324,7 @@ const eventsManager = EventsManager.getInstance();
 
       html += element;
     }
-    memoryUIElement.innerHTML = html;
+    memoryContentUIElement.innerHTML = html;
   }
 
   function handlePCUpdate() {
@@ -242,16 +332,78 @@ const eventsManager = EventsManager.getInstance();
     const pcElement = document.getElementById(`p${pc4ByteString}`);
     if (pcElement) {
       const activeElement = document.querySelector(".current-pc");
-      if (activeElement) {
-        activeElement.classList.remove("current-pc");
+      const classesToAddAndRemove = ["current-pc"];
+      if(PROGRAM_STATE.debuggerEnabled) {
+        classesToAddAndRemove.push("breakpoint");
       }
-      pcElement.classList.add("current-pc");
+      if (activeElement) {
+        activeElement.classList.remove(...classesToAddAndRemove);
+      }
+      pcElement.classList.add(...classesToAddAndRemove);
+
       // Scroll to the current program counter
-      pcElement.scrollIntoView({
-        behavior: "instant",
-        block: "center",
-        inline: "center",
-      });
+      const followPC = followPCUIElement.checked;
+      if (followPC) {
+        pcElement.scrollIntoView(SCROLL_BEHAVIOR_PARAMS);
+      }
     }
   }
+
+  function checkDebugger() {
+    if (PROGRAM_STATE.debuggerEnabled) {
+      PROGRAM_STATE.running = false;
+    }
+  }
+
+  // UI Event handlers
+  function gotoAddress() {
+    const value = gotoAddressUIInputElement.value;
+
+    if (!value) return;
+
+    const prefixedValue = value.startsWith("0x") ? value : `0x${value}`;
+    let address = parseInt(prefixedValue, 16);
+
+    if (!isNaN(address) && address >= 0 && address <= 0xfff) {
+      address = address & 0xffe; // make sure it's even
+      const addressHex = address.toString(16).padStart(4, "0");
+      const pcElement = document.getElementById(`p${addressHex}`);
+      if (pcElement) {
+        pcElement.scrollIntoView(SCROLL_BEHAVIOR_PARAMS);
+
+        // play a little animation
+        pcElement.animate(...BLINKING_ANIMATION_PARAMS);
+      }
+    } else {
+      console.error("Invalid address");
+    }
+  }
+
+  function gotoPC() {
+    const pc = REGISTER.pc;
+    const pc4ByteString = pc.toString(16).padStart(4, "0");
+    const pcElement = document.getElementById(`p${pc4ByteString}`);
+    if (pcElement) {
+      pcElement.scrollIntoView(SCROLL_BEHAVIOR_PARAMS);
+
+      // play a little animation
+      pcElement.animate(...BLINKING_ANIMATION_PARAMS);
+    }
+  }
+
+  function toggleDebugger() {
+    PROGRAM_STATE.debuggerEnabled = toggleDebuggerUIElement.checked;
+    if (PROGRAM_STATE.debuggerEnabled) {
+      PROGRAM_STATE.running = false;
+    } else {
+      PROGRAM_STATE.running = true;
+    }
+  }
+
+  //@ts-ignore
+  window.gotoAddress = gotoAddress;
+  //@ts-ignore
+  window.gotoPC = gotoPC;
+  //@ts-ignore
+  window.loadProgram = loadProgram;
 })();
