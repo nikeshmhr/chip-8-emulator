@@ -2,6 +2,7 @@ import EventsManager, { EVENTS } from "./eventManager";
 import RAM from "./memory";
 import register from "./register";
 import IBMLogo from "./rom/ibm-logo";
+import { ROM_MAPS } from "./rom/rom.map";
 
 const eventsManager = EventsManager.getInstance();
 
@@ -151,42 +152,54 @@ const eventsManager = EventsManager.getInstance();
         const opcode =
           (RAM.memory[REGISTER.pc] << 8) | RAM.memory[REGISTER.pc + 1];
 
+        let nextInstruction = REGISTER.pc + 2;
+
+        const { X, Y, N, NN, NNN } = {
+          X: (opcode & 0x0f00) >> 8,
+          Y: (opcode & 0x00f0) >> 4,
+          N: opcode & 0x000f,
+          NN: opcode & 0x00ff,
+          NNN: opcode & 0x0fff,
+        };
+
         switch (opcode & 0xf000) {
           case 0x0000:
-            if ((opcode & 0x0fff) == 0x00e0) {
+            // clear screen
+            if (NNN == 0x00e0) {
               clearScreen();
-              REGISTER.pc += 2;
             }
             break;
 
+          // 1NNN (jump)
           case 0x1000:
-            REGISTER.pc = opcode & 0x0fff;
+            nextInstruction = NNN;
             break;
 
+          // 6XNN (set register VX)
           case 0x6000:
-            const register = (opcode & 0x0f00) >> 8;
-            const value = opcode & 0x00ff;
+            const register = X;
+            const value = NN;
             REGISTER.setRegister(register, value);
-            REGISTER.pc += 2;
             break;
 
+          // 7XNN (add value to register VX)
           case 0x7000:
-            const r = (opcode & 0x0f00) >> 8;
-            const val = opcode & 0x00ff;
+            const r = X;
+            const val = NN;
             REGISTER.setRegister(r, REGISTER.V[r] + val);
-            REGISTER.pc += 2;
             break;
 
+          // ANNN (set index register I)
           case 0xa000:
-            const v = opcode & 0x0fff;
+            const v = NNN;
             REGISTER.I = v;
-            REGISTER.pc += 2;
             break;
 
+          // DXYN (display/draw)
           case 0xd000:
-            const height = opcode & 0x000f;
-            const x = REGISTER.V[(opcode & 0x0f00) >> 8];
-            const y = REGISTER.V[(opcode & 0x00f0) >> 4];
+            const height = N;
+            const x = REGISTER.V[X];
+            const y = REGISTER.V[Y];
             REGISTER.setRegister(0xf, 0);
             for (let i = 0; i < height; i++) {
               const spriteData = RAM.memory[REGISTER.I + i];
@@ -200,16 +213,17 @@ const eventsManager = EventsManager.getInstance();
               }
             }
             drawScreen();
-            REGISTER.pc += 2;
             break;
 
           default:
             console.error(`Unknown opcode: ${opcode.toString(16)}`);
             PROGRAM_STATE.running = false;
+            throw new Error(`Unknown opcode: ${opcode.toString(16)}`);
         }
+
+        REGISTER.pc = nextInstruction;
       }
 
-      // await sleep(500);
       checkDebugger();
     }
     requestAnimationFrame(loop);
@@ -242,7 +256,8 @@ const eventsManager = EventsManager.getInstance();
   }
 
   function loadProgram() {
-    const program = IBMLogo;
+    const program =
+      ROM_MAPS[selectProgramUIElement.value as keyof typeof ROM_MAPS];
     RAM.loadProgram(Uint8Array.from(program));
 
     // start program
@@ -333,7 +348,7 @@ const eventsManager = EventsManager.getInstance();
     if (pcElement) {
       const activeElement = document.querySelector(".current-pc");
       const classesToAddAndRemove = ["current-pc"];
-      if(PROGRAM_STATE.debuggerEnabled) {
+      if (PROGRAM_STATE.debuggerEnabled) {
         classesToAddAndRemove.push("breakpoint");
       }
       if (activeElement) {
