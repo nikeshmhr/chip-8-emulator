@@ -10,7 +10,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     romToLoad = romQuery;
   }
 
-  const rom = await fetch(`/rom/${romToLoad}`).then((response) =>
+  const rom = await fetch(`./rom/${romToLoad}`).then((response) =>
     response.arrayBuffer()
   );
   const emulator = new Emulator(new Uint8Array(rom));
