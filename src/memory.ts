@@ -1,11 +1,20 @@
 import { MEMORY_SIZE } from "./constants";
+import EventsManager, { EVENTS } from "./eventManager";
+import { StateableRetrievable } from "./interface";
 
-class Memory {
+class Memory implements StateableRetrievable {
   private _memory = new Uint8Array(MEMORY_SIZE); // 4KB memory
   private _stack: number[]; // 16 levels of stack
 
   constructor() {
     this._stack = [];
+  }
+
+  getState() {
+    return {
+      memory: this._memory,
+      stack: this._stack,
+    };
   }
 
   get memory() {
@@ -18,6 +27,7 @@ class Memory {
     }
 
     this._memory[address] = value;
+    EventsManager.getInstance().publish(EVENTS.REGISTER_UPDATED, this.memory);
   }
 
   pushStack(value: number) {

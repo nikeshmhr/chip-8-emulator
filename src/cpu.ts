@@ -3,11 +3,12 @@ import {
   FONT_START_ADDRESS,
   IDisplayRenderer,
   ISoundInterface,
-  KeyState,
   PROGRAM_START_ADDRESS,
 } from "./constants";
 import DisplayBuffer from "./displayBuffer";
+import EventsManager, { EVENTS } from "./eventManager";
 import Input from "./Input";
+import { StateableRetrievable } from "./interface";
 import Logger from "./logger";
 import Memory from "./memory";
 
@@ -20,7 +21,7 @@ interface IDecodeInstruction {
   instructionSet: number;
 }
 
-class Cpu {
+class Cpu implements StateableRetrievable {
   private readonly V = new Uint8Array(16); // registers
   private PC = PROGRAM_START_ADDRESS; // program counter
   private I = 0; // index register
@@ -39,6 +40,16 @@ class Cpu {
     this.startTimers();
   }
 
+  getState() {
+    return {
+      registers: this.V,
+      PC: this.PC,
+      I: this.I,
+      delayTimer: this.delayTimer,
+      soundTimer: this.soundTimer,
+    };
+  }
+
   private loadFontSet() {
     this.logger.log("Loading font set...");
     for (let i = 0; i < FONT_SET.length; i++) {
@@ -55,19 +66,41 @@ class Cpu {
       }
       if (this.soundTimer > 0) {
         console.log("BEEP");
-        this.soundInterface.play();
+        this.soundInterface.beep();
         this.soundTimer--;
-      } else {
-        this.soundInterface.stop();
       }
     }, 1000 / 60);
+  }
+
+  private setPC(pc: number) {
+    const previousPC = this.PC;
+    this.PC = pc;
+    // only publish the event if the value is different
+    if (previousPC !== this.PC) {
+      EventsManager.getInstance().publish(
+        EVENTS.PROGRAM_COUNTER_UPDATED,
+        this.PC
+      );
+    }
+  }
+
+  private setRegisterValue(register: number, value: number) {
+    const prevRegisterValue = this.V[register];
+    this.V[register] = value;
+    if (prevRegisterValue !== value) {
+      this.V[register] = value;
+      EventsManager.getInstance().publish(EVENTS.REGISTER_UPDATED, {
+        register,
+        value,
+      });
+    }
   }
 
   private fetchInstruction(): number {
     // Read two bytes starting from the program counter
     const opcode =
       (this.memory.memory[this.PC] << 8) | this.memory.memory[this.PC + 1];
-    this.PC += 2;
+    this.setPC(this.PC + 2);
     return opcode;
   }
 
@@ -97,7 +130,7 @@ class Cpu {
           // 0x00EE (return from subroutine)
           case 0xee:
             const stackValue = this.memory.popStack();
-            this.PC = stackValue;
+            this.setPC(stackValue);
             break;
 
           default:
@@ -109,17 +142,17 @@ class Cpu {
 
       // 1NNN (jump)
       case 0x1000:
-        this.PC = nnn;
+        this.setPC(nnn);
         break;
 
       // 6XNN (set register VX to nn)
       case 0x6000:
-        this.V[x] = nn;
+        this.setRegisterValue(x, nn);
         break;
 
       // 7XNN (add NN value to register VX)
       case 0x7000:
-        this.V[x] += nn;
+        this.setRegisterValue(x, this.V[x] + nn);
         break;
 
       // ANNN (set index register I to NNN)
@@ -132,14 +165,14 @@ class Cpu {
         const height = n;
         const xCord = this.V[x];
         const yCord = this.V[y];
-        this.V[0xf] = 0;
+        this.setRegisterValue(0xf, 0);
         const spriteData = new Uint8Array(height);
         for (let i = 0; i < height; i++) {
           spriteData[i] = this.memory.memory[this.I + i];
         }
 
         const hasCollision = this.displayBuffer.write(xCord, yCord, spriteData);
-        this.V[0xf] = hasCollision ? 1 : 0;
+        this.setRegisterValue(0xf, hasCollision ? 1 : 0);
         this.displayRenderer.drawScreen(this.displayBuffer.pixelData);
         break;
       }
@@ -147,21 +180,21 @@ class Cpu {
       // 3XNN (skip next instruction if VX equals NN)
       case 0x3000:
         if (this.V[x] === nn) {
-          this.PC += 2;
+          this.setPC(this.PC + 2);
         }
         break;
 
       // 5XY0 (skip next instruction if VX equals VY)
       case 0x5000:
         if (this.V[x] === this.V[y]) {
-          this.PC += 2;
+          this.setPC(this.PC + 2);
         }
         break;
 
       // 4XNN (skip next instruction if VX does not equal NN)
       case 0x4000:
         if (this.V[x] !== nn) {
-          this.PC += 2;
+          this.setPC(this.PC + 2);
         }
         break;
 
@@ -170,54 +203,54 @@ class Cpu {
         switch (n) {
           // 8XY0 (sets VX to the value of VY)
           case 0x0:
-            this.V[x] = this.V[y];
+            this.setRegisterValue(x, this.V[y]);
             break;
 
           // 8XY1 (sets VX to VX OR VY)
           case 0x1:
-            this.V[x] |= this.V[y];
+            this.setRegisterValue(x, this.V[x] | this.V[y]);
             break;
 
           // 8XY2 (sets VX to VX AND VY)
           case 0x2:
-            this.V[x] &= this.V[y];
+            this.setRegisterValue(x, this.V[x] & this.V[y]);
             break;
 
           // 8XY3 (sets VX to VX XOR VY)
           case 0x3:
-            this.V[x] ^= this.V[y];
+            this.setRegisterValue(x, this.V[x] ^ this.V[y]);
             break;
 
           // 8XY4 (add VY to VX, VF is set to 1 if there is a carry)
           case 0x4:
-            this.V[0xf] = this.V[x] + this.V[y] > 255 ? 1 : 0;
-            this.V[x] += this.V[y];
+            this.setRegisterValue(0xf, this.V[x] + this.V[y] > 255 ? 1 : 0);
+            this.setRegisterValue(x, this.V[x] + this.V[y]);
             break;
 
           // 8XY5 (sets VX to the result of VX - VY)
           case 0x5:
-            this.V[0xf] = this.V[x] > this.V[y] ? 1 : 0;
-            this.V[x] -= this.V[y];
+            this.setRegisterValue(0xf, this.V[x] > this.V[y] ? 1 : 0);
+            this.setRegisterValue(x, this.V[x] - this.V[y]);
             break;
 
           // 8XY7 (sets VX to VY - VX)
           case 0x7:
-            this.V[0xf] = this.V[y] > this.V[x] ? 1 : 0;
-            this.V[x] = this.V[y] - this.V[x];
+            this.setRegisterValue(0xf, this.V[x] > this.V[y] ? 1 : 0);
+            this.setRegisterValue(x, this.V[y] - this.V[x]);
             break;
 
           // 8XY6 (VX is set to VY, then shifts right by one, VF is set to the value of the least significant bit of VX before the shift)
           case 0x6:
-            this.V[x] = this.V[y];
-            this.V[0xf] = this.V[x] >> 7;
-            this.V[x] >>= 1;
+            this.setRegisterValue(x, this.V[y]);
+            this.setRegisterValue(0xf, this.V[x] >> 7);
+            this.setRegisterValue(x, this.V[x] >> 1);
             break;
 
           // 8XYE (VX is set to VY, then shifts VX left by one, VF is set to the value of the most significant bit of VX before the shift)
           case 0xe:
-            this.V[x] = this.V[y];
-            this.V[0xf] = this.V[x] >> 7;
-            this.V[x] <<= 1;
+            this.setRegisterValue(x, this.V[y]);
+            this.setRegisterValue(0xf, this.V[x] >> 7);
+            this.setRegisterValue(x, this.V[x] << 1);
             break;
 
           default:
@@ -247,7 +280,7 @@ class Cpu {
           // FX65 (load registers) - load V0 to VX (if X is 0, then only V0) from memory starting at address I
           case 0x65: {
             for (let i = 0; i <= x; i++) {
-              this.V[i] = this.memory.memory[this.I + i];
+              this.setRegisterValue(i, this.memory.memory[this.I + i]);
             }
             this.I = this.I + x + 1;
             break;
@@ -274,7 +307,7 @@ class Cpu {
 
           // FX07 (set VX to the value of the delay timer)
           case 0x07:
-            this.V[x] = this.delayTimer;
+            this.setRegisterValue(x, this.delayTimer);
             break;
 
           // FX18 (set sound timer to VX)
@@ -288,14 +321,14 @@ class Cpu {
             let keyPressed = false;
             for (let i = 0; i < this.keyInput.key.length; i++) {
               if (this.keyInput.key[i] === true) {
-                this.V[x] = i;
+                this.setRegisterValue(x, i);
                 keyPressed = true;
                 break;
               }
             }
 
             if (!keyPressed) {
-              this.PC -= 2;
+              this.setPC(this.PC - 2);
             }
             break;
 
@@ -307,24 +340,24 @@ class Cpu {
       // 9XY0 (skip next instruction if VX does not equal VY)
       case 0x9000:
         if (this.V[x] !== this.V[y]) {
-          this.PC += 2;
+          this.setPC(this.PC + 2);
         }
         break;
 
       // 2NNN (call subroutine)
       case 0x2000:
         this.memory.pushStack(this.PC);
-        this.PC = nnn;
+        this.setPC(nnn);
         break;
 
       // BNNN (jump with offset)
       case 0xb000:
-        this.PC = nnn + this.V[0];
+        this.setPC(nnn + this.V[0]);
         break;
 
       // CXNN (set VX to a random number AND NN)
       case 0xc000:
-        this.V[x] = Math.floor(Math.random() * 0xff) & nn;
+        this.setRegisterValue(x, Math.floor(Math.random() * 0xff) & nn);
         break;
 
       // EXXX (keyboard operations)
@@ -333,14 +366,14 @@ class Cpu {
           // EXA1 (skip next instruction if key stored in VX is not pressed)
           case 0xa1:
             if (this.keyInput.key[this.V[x]] === false) {
-              this.PC += 2;
+              this.setPC(this.PC + 2);
             }
             break;
 
           // EX9E (skip next instruction if key stored in VX is pressed)
           case 0x9e:
             if (this.keyInput.key[this.V[x]] === true) {
-              this.PC += 2;
+              this.setPC(this.PC + 2);
             }
             break;
 

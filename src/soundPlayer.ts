@@ -1,25 +1,25 @@
 import { ISoundInterface } from "./constants";
 
 class SoundPlayer implements ISoundInterface {
-  private audio: HTMLAudioElement;
+  private audioContext: AudioContext;
 
   constructor() {
-    this.audio = new Audio();
-    this.audio.src =
-      "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="; // Beep sound data URL
-    this.audio.load();
+    this.audioContext = new AudioContext();
   }
 
-  play() {
-    this.audio.currentTime = 0; // Reset to start
-    this.audio.play();
-  }
+  beep() {
+    const mainGainNode = this.audioContext.createGain();
+    mainGainNode.connect(this.audioContext.destination);
+    mainGainNode.gain.value = 0.5;
 
-  stop() {
-    if (!this.audio.paused) {
-      this.audio.pause();
-      this.audio.currentTime = 0; // Reset to start
-    }
+    const oscillator = this.audioContext.createOscillator();
+    oscillator.connect(mainGainNode);
+
+    oscillator.type = "square";
+    oscillator.frequency.value = 87.307057858250971;
+
+    oscillator.start();
+    oscillator.stop(this.audioContext.currentTime + 0.1);
   }
 }
 

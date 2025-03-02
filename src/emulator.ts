@@ -10,6 +10,7 @@ import DisplayRenderer from "./displayRenderer";
 import Logger from "./logger";
 import SoundPlayer from "./soundPlayer";
 import Input from "./Input";
+import EventsManager, { EVENTS } from "./eventManager";
 
 class Emulator {
   private memory: Memory;
@@ -46,8 +47,16 @@ class Emulator {
     }
   }
 
+  getEmulatorState() {
+    return {
+      memory: this.memory.getState(),
+      cpu: this.cpu.getState(),
+    };
+  }
+
   private initProgram(rom: Uint8Array) {
     this.loadProgram(rom);
+    EventsManager.getInstance().publish(EVENTS.PROGRAM_LOADED, null);
   }
 
   private loadProgram(program: Uint8Array) {

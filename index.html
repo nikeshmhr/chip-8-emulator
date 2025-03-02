@@ -201,6 +201,7 @@
         }
 
         .debugger-control {
+            display: none;
             /* display: flex; */
             /* gap: 10px; */
         }
@@ -231,9 +232,6 @@
             <div>
                 <label for="select-program">Select a program</label>
                 <select id="select-program">
-                    <option value="IBM_LOGO">IBM LOGO</option>
-                    <option value="BC_TEST">BC TEST</option>
-                    <option value="TEST_OPCODE">TEST OPCODE</option>
                 </select>
             </div>
             <div>
@@ -246,8 +244,8 @@
                 <label for="toggle-debugger">Enable Debugger</label>
                 <input type="checkbox" id="toggle-debugger">
             </div>
-            <button id="step">Step</button>
-            <button id="continue">Continue</button>
+            <button id="step" disabled>Step</button>
+            <button id="continue" disabled>Continue</button>
 
         </div>
     </div>
@@ -266,7 +264,7 @@
         <canvas id="screen" width="640" height="320"></canvas>
 
         <div>
-            <div id="memory">
+            <div id="memory" style="height: 320px;">
                 <div class="memory-heading">
                     <h2>Memory</h2>
 
