@@ -19,8 +19,7 @@ class SoundPlayer implements ISoundInterface {
     oscillator.frequency.value = 87.307057858250971;
 
     oscillator.start();
-    console.log("beep");
-    oscillator.stop(this.audioContext.currentTime + 0.2);
+    oscillator.stop(this.audioContext.currentTime + 0.1);
   }
 }
 
