@@ -55,10 +55,8 @@ class Cpu {
       }
       if (this.soundTimer > 0) {
         console.log("BEEP");
-        this.soundInterface.play();
+        this.soundInterface.beep();
         this.soundTimer--;
-      } else {
-        this.soundInterface.stop();
       }
     }, 1000 / 60);
   }

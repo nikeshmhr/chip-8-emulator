@@ -45,8 +45,7 @@ export interface IDisplayRenderer {
 }
 
 export interface ISoundInterface {
-  play(): void;
-  stop(): void;
+  beep(): void;
 }
 
 export type KeyState = true | false;
