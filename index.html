@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHIP-8</title>
+    <style>
+        :root {
+            --color-light-green: #b4e5af;
+            --color-vibrant-green: #4caf50;
+            --color-dark-gray: #2c2c2c;
+            --color-very-dark-gray: #1e1e1e;
+            --color-purple: blueviolet;
+            --color-teal: #008080;
+
+            box-sizing: border-box;
+        }
+
+        body {
+            /* display: flex;
+            flex-direction: column;
+            align-items: center; */
+            background-color: black;
+            color: #b4e5af;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #2c2c2c;
+            border-radius: 10px;
+        }
+
+        /* Scrollbar thumb */
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(45deg, #b4e5af, #4caf50);
+            border-radius: 10px;
+            border: 2px solid #2c2c2c;
+        }
+
+        /* Scrollbar corner (for resizable scrollbars) */
+        ::-webkit-scrollbar-corner {
+            background: #2c2c2c;
+        }
+
+        /* Scrollbar width */
+        ::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+            text-align: center;
+            margin: 0;
+        }
+
+        canvas {
+            border: 1px solid #b4e5af;
+        }
+
+        #container {
+            display: flex;
+            justify-content: space-evenly;
+            gap: 20px;
+            min-width: 1200px;
+            align-items: flex-start;
+            margin-top: 20px;
+            max-height: 100vh;
+        }
+
+        canvas {
+            /* flex-grow: 2; */
+            /* order: 2; */
+        }
+
+        #memory {
+            /* order: 3; */
+            overflow: auto;
+            /* flex-grow: 1; */
+            min-width: 300px;
+            min-height: 300px;
+        }
+
+        canvas {
+            flex-shrink: 0;
+        }
+
+        #registers {
+            display: flex;
+            flex-direction: column;
+            /* align-items: center; */
+            gap: 8px;
+        }
+
+        #registers .row {
+            display: flex;
+            justify-content: space-around;
+            gap: 8px;
+            /* border: 1px solid red; */
+        }
+
+        #memory div.current-pc {
+            background-color: blueviolet;
+        }
+
+        #memory div.current-pc.breakpoint {
+            background-color: #008080;
+        }
+
+        #memory div.current-pc.breakpoint::after {
+            content: '     <==== break';
+        }
+
+        .address,
+        .opcode {
+            /* border: 1px solid red; */
+        }
+
+        .address {
+            /* font-size: 0.9em; */
+            border-right: 1px solid #b4e5af;
+            padding-right: 5px;
+        }
+
+        .opcode {
+            font-weight: bold;
+        }
+
+        .memory-heading {
+            position: sticky;
+            top: 0;
+            background-color: black;
+            color: #b4e5af;
+            z-index: 1;
+        }
+
+        .memory-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+            flex-direction: column;
+            padding: 10px 0;
+        }
+
+        /* Themed input fields and buttons */
+        input[type="text"],
+        input[type="checkbox"],
+        button {
+            font-family: Arial, sans-serif;
+        }
+
+        input[type="text"] {
+            background-color: #333;
+            color: #b4e5af;
+            border: 1px solid #4caf50;
+            padding: 5px;
+            border-radius: 5px;
+        }
+
+        input[type="checkbox"] {
+            accent-color: #4caf50;
+            width: 16px;
+            /* Increase width */
+            height: 16px;
+            /* Increase height */
+        }
+
+        button {
+            background-color: #4caf50;
+            color: #1e1e1e;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .control-panel {
+            /* border: 1px solid red; */
+            max-height: 200px;
+            min-height: 200px;
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .load-program {
+            /* border: 1px solid red; */
+            /* display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px; */
+        }
+
+        .debugger-control {
+            display: none;
+            /* display: flex; */
+            /* gap: 10px; */
+        }
+
+        /* Themed select input */
+        select {
+            background-color: #333;
+            color: #b4e5af;
+            border: 1px solid #4caf50;
+            padding: 5px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            /* Consistent margin with other inputs */
+        }
+
+        /* Optional: Add hover effect for select input */
+        select:hover {
+            border-color: #45a049;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>CHIP-8 Interpreter</h1>
+    <div class="control-panel">
+        <div class="load-program">
+            <h2>Load Program</h2>
+            <div>
+                <label for="select-program">Select a program</label>
+                <select id="select-program">
+                </select>
+            </div>
+            <div>
+                <button id="load-program">Load Program</button>
+            </div>
+        </div>
+        <div class="debugger-control">
+            <h2>Debugger</h2>
+            <div>
+                <label for="toggle-debugger">Enable Debugger</label>
+                <input type="checkbox" id="toggle-debugger">
+            </div>
+            <button id="step" disabled>Step</button>
+            <button id="continue" disabled>Continue</button>
+
+        </div>
+    </div>
+
+    <div id="container">
+        <div id="registers">
+            <div class="row">
+                <h2>Register values</h2>
+            </div>
+            <div class="row">
+                <div>Name</div>
+                <div>Values</div>
+            </div>
+        </div>
+
+        <canvas id="screen" width="640" height="320"></canvas>
+
+        <div>
+            <div id="memory" style="height: 320px;">
+                <div class="memory-heading">
+                    <h2>Memory</h2>
+
+                    <div class="memory-controls">
+                        <div>
+                            <button id="go-to-pc">Go to PC</button>
+                        </div>
+                        <div>
+                            <input type="text" id="memory-search" placeholder="Go to address (0xfff/fff)"
+                                autocomplete="off">
+                            <button id="memory-search-btn">Go</button>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="follow-pc" checked>
+                            <label for="follow-pc">Follow PC</label>
+                        </div>
+                    </div>
+
+                </div>
+                <div id="memory-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./index.js"></script>
+</body>
+
+</html>

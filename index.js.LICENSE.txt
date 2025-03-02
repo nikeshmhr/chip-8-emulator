@@ -1,0 +1,7 @@
+/*!
+ * emitry
+ * https://github.com/PengJiyuan/emitry
+ *
+ * Copyright (c) 2018 PengJiyuan
+ * Licensed under the MIT license.
+ */
