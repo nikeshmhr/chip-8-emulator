@@ -1,4 +1,4 @@
-export const FPS = 700;
+export const FPS = 60;
 export const MILLISECONDS_IN_A_SECOND = 1000;
 export const FRAME_TIME_MS = MILLISECONDS_IN_A_SECOND / FPS;
 
