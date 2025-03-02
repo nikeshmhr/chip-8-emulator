@@ -29,5 +29,10 @@ module.exports = {
                 { from: "./index.html" }
             ],
         }),
+        new CopyPlugin({
+            patterns: [
+                { from: "./rom", to: "rom" }
+            ],
+        })
     ],
 };
