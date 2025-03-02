@@ -6,7 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CHIP-8</title>
     <style>
-        * {
+        :root {
+            --color-light-green: #b4e5af;
+            --color-vibrant-green: #4caf50;
+            --color-dark-gray: #2c2c2c;
+            --color-very-dark-gray: #1e1e1e;
+            --color-purple: blueviolet;
+            --color-teal: #008080;
+
             box-sizing: border-box;
         }
 
@@ -68,11 +75,6 @@
         canvas {
             /* flex-grow: 2; */
             /* order: 2; */
-        }
-
-        #registers,
-        #memory {
-            /* flex-grow: 0; */
         }
 
         #memory {
@@ -261,7 +263,7 @@
             </div>
         </div>
 
-        <canvas id="screen" width="64" height="32"></canvas>
+        <canvas id="screen" width="640" height="320"></canvas>
 
         <div>
             <div id="memory">
