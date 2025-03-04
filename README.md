@@ -18,12 +18,12 @@ Writing a CHIP-8 emulator following along with [blog](https://tobiasvl.github.io
 
 ## TODO
 
-- [ ] add debugging capabilities
-- [ ] break on start
-- [ ] step
 - [x] print contents of registers - only 16 so can print it all the time
 - [x] print contents of memory - 4096 bytes so need to frame/window the segment
 - [x] print the whole program (raw bytes) - left column address right column instruction
 - [x] clean code
-- [ ] option to enable and disable debug control
 - [x] show keymap
+- [ ] option to enable and disable debug control
+- [ ] add debugging capabilities
+- [ ] break on start
+- [ ] step
