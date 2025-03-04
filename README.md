@@ -26,3 +26,4 @@ Writing a CHIP-8 emulator following along with [blog](https://tobiasvl.github.io
 - [x] print the whole program (raw bytes) - left column address right column instruction
 - [x] clean code
 - [ ] option to enable and disable debug control
+- [x] show keymap
